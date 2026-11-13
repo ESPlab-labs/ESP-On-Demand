@@ -37,11 +37,14 @@ Sanity check from any board's console (`idf.py -p PORT monitor`):
 (esplab) status        # lists every board with its chip type
 ```
 
-## Step 2 — start the WebUI (the machine's dashboard)
+## Step 2 — start the dashboard
 
 On the computer the boards are plugged into:
 
 ```bash
+# boards on USB serial ports (pyserial required):
+ESPLAB_SERIAL=/dev/ttyUSB0 python3 tools/webui/webui.py
+# ...or, for a virtual-board test cluster, omit ESPLAB_SERIAL
 python3 tools/webui/webui.py
 # dashboard: http://localhost:8080
 ```
@@ -53,16 +56,20 @@ cluster.
 ## Step 3 — encode a clip
 
 ```bash
-python3 tools/eod_prep.py test test --synth    # test clip, no ffmpeg needed
-# or from any video file (needs ffmpeg):
+# from any video file (needs ffmpeg):
 python3 tools/eod_prep.py myvideo.mp4 myclip
 ```
+
+Encoding resamples your video to 64×48 at 10 fps and packs it into the
+compact EOD1 format — roughly 11–25 KB per second of footage. The EOD
+release tarball includes `eod_enc`, and a no-ffmpeg synthetic test clip is
+available with `--synth` for smoke-testing the chain.
 
 ## Step 4 — start ESP On Demand
 
 ```bash
 python3 tools/eod_serve.py --webui http://127.0.0.1:8080 \
-        --clip test.eod --port 8090
+        --clip myclip.eod --port 8090
 ```
 
 `--webui` points at the dashboard from Step 2 — that's the whole
@@ -73,10 +80,12 @@ console-backed API.
 
 Open `http://localhost:8090/` and press play. Every frame you see is being
 decoded by the cluster as you watch: 12 pixel-band jobs per frame,
-distributed across every board by the machine.
+distributed across every board.
 
 Watch the dashboard at :8080 while it plays — the frame jobs run on the
 boards, live. Per-frame decode times: `http://localhost:8090/metrics`.
+On real boards a frame decodes in well under a second; on the throttled
+virtual boards it takes several seconds, then replays instantly from cache.
 
 ### If something looks wrong
 
@@ -116,14 +125,13 @@ spawns its own 3-board virtual cluster and serves on :8090.
 
 | piece | repo |
 |---|---|
-| the machine (firmware, VM, virtual boards) | [ESPlab](https://github.com/ESPlab-labs/ESPlab) |
-| the dashboard service (required) | [ESPlab-WebUI](https://github.com/ESPlab-labs/ESPlab-WebUI) |
+| cluster firmware, VM, virtual boards | [ESPlab](https://github.com/ESPlab-labs/ESPlab) |
+| dashboard service (required) | [ESPlab-WebUI](https://github.com/ESPlab-labs/ESPlab-WebUI) |
 | this media service | [ESP-On-Demand](https://github.com/ESPlab-labs/ESP-On-Demand) |
 
-## What "end-to-end" proves
+## Status
 
-The full chain — browser → EOD service → WebUI → machine console →
-coordinator → boards (via radio-style fragmented messages) → bytecode
-decoder → reassembled pixels — has been verified frame-exact: the complete
-75-frame test clip decodes byte-identical to an independent reference
-decoder, with every band job round-tripping the real wire protocol.
+The full chain — browser → EOD service → dashboard → coordinator → boards →
+bytecode decoder → pixels — decodes frame-exact against an independent
+reference decoder, on real footage (a Creative-Commons Blender short) as
+well as synthetic clips.
